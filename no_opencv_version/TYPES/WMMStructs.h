@@ -1,5 +1,5 @@
-#include <stdlib.h>
-#include <math.h>
+#include <cstdlib>
+#include <cmath>
 
 #ifndef MPPSTRUCTS_H
 #define    MPPSTRUCTS_H
@@ -20,7 +20,7 @@ namespace wmm {
         _Tp y;
         _Tp x;
 
-        inline Node_(_Tp _y = 0, _Tp _x = 0) : y(_y), x(_x) {}
+        explicit inline Node_(_Tp _y = 0, _Tp _x = 0) : y(_y), x(_x) {}
     };
 
     template<typename _Tp>
@@ -43,7 +43,7 @@ namespace wmm {
 
     template<typename _Tp>
     inline double norm(const Node_<_Tp> &p) {
-        return sqrt((double) (p.x * p.x + p.y * p.y));
+        return sqrt(p.x * p.x + p.y * p.y);
     }
 
     typedef Node_<int> Node;
@@ -51,7 +51,7 @@ namespace wmm {
 
     template<typename _Tp>
     inline _Tp *initArray(int anum, _Tp v) {
-        _Tp *out = (_Tp *) malloc(anum * sizeof(_Tp));
+        auto out = (_Tp *) malloc(anum * sizeof(_Tp));
         for (int i = 0; i < anum; i++) {
             out[i] = v;
         }
@@ -87,27 +87,14 @@ namespace wmm {
 
     typedef Grid_<double> Grid;
 
-
     template<typename _Tp>
-    struct Wmm0_ {
+    struct Wmm_ {
         Node p;
         _Tp v[3];
-        int dir;
+        int dir = -1;
+        _Tp m[5];
+        _Tp fm[5];
     };
-
-    template<typename _Tp, int N>
-    struct Wmm_ : public Wmm0_<_Tp> {
-        _Tp m[N];
-        _Tp fm[N];
-    };
-
-    template<typename _Tp>
-    struct Wmm_<_Tp, 0> : public Wmm0_<_Tp> {
-        _Tp m[1];
-        _Tp fm[1];
-    };
-
-    typedef Wmm_<double, 4> WmmNode;
 
 }
 #endif    /* MPPSTRUCTS_H */

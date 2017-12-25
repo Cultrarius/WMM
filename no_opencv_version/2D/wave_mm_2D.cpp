@@ -6,8 +6,7 @@
 
 namespace wmm {
 
-    template<int N>
-    double GetInterpValue(wmm::Wmm_<double, N> &wave, wmm::NodeD &dp, wmm::NodeD &dd, wmm::NodeD &dn, wmm::NodeD &f0,
+    double GetInterpValue(wmm::Wmm_<double> &wave, wmm::NodeD &dp, wmm::NodeD &dd, wmm::NodeD &dn, wmm::NodeD &f0,
                           wmm::NodeD &f1, wmm::NodeD &fn, double epsilon, int side) {
 
         double ft, value, y0 = wave.v[0], y1 = wave.v[side + 1];
@@ -25,9 +24,7 @@ namespace wmm {
         return value;
     }
 
-
     double GetEpsilonGradient(wmm::NodeD &dd, wmm::NodeD &dp, wmm::NodeD &dn, wmm::NodeD &fn) {
-
         double epsilon;
         double A = -dd.y, B = dd.x, C = dd.y * dp.x - dd.x * dp.y;
         double den = A * fn.x + B * fn.y;
@@ -51,13 +48,10 @@ namespace wmm {
         else if (epsilon > 1.0)
             epsilon = 1.0;
         return epsilon;
-
     }
 
-    template<int N>
     double
-    GetVal2D(wmm::Grid &image, wmm::Grid &u_surface, wmm::Wmm_<double, N> &wave, wmm::Node &neigh, wmm::NodeD &h) {
-
+    GetVal2D(wmm::Grid &image, wmm::Grid &u_surface, wmm::Wmm_<double> &wave, wmm::Node &neigh, wmm::NodeD &h) {
         wmm::NodeD f0(image.at(wave.p, 0), image.at(wave.p, 1)), fn(image.at(neigh, 0), image.at(neigh, 1));
         double y0 = wave.v[0];
 
@@ -76,8 +70,6 @@ namespace wmm {
             wmm::NodeD dp(h.y * wave.p.y, h.x * wave.p.x), dn(h.y * neigh.y, h.x * neigh.x);
 
             if (u_surface.contains(p)) {
-                double y1 = wave.v[1];
-
                 wmm::NodeD dd(h.y * (wmm::yarray[(wave.dir + 1) % 8] - wmm::yarray[wave.dir]),
                               h.x * (wmm::xarray[(wave.dir + 1) % 8] - wmm::xarray[wave.dir]));
 
@@ -95,8 +87,6 @@ namespace wmm {
             double res2 = wmm::MAX_VAL;
 
             if (u_surface.contains(p)) {
-                double y1 = wave.v[2];
-
                 wmm::NodeD dd(h.y * (wmm::yarray[(wave.dir + 7) % 8] - wmm::yarray[wave.dir]),
                               h.x * (wmm::xarray[(wave.dir + 7) % 8] - wmm::xarray[wave.dir]));
 
@@ -115,11 +105,9 @@ namespace wmm {
         }
 
         return val;
-
     }
 
-
-    void setCoeffs2D(double *y, double *m, int pos) {
+    void setCoeffs2D(const double *y, double *m, int pos) {
         m[0] = y[pos];
         if (pos % 2 == 0) {
             m[2] = (y[(pos + 2) % 8] + y[pos] - 2.0 * y[(pos + 1) % 8]) / 2.0;
@@ -134,10 +122,8 @@ namespace wmm {
 
     }
 
-
-    template<int wmm_degree>
+    template<int>
     wmm::Grid WmmIsoSurface2D(wmm::Grid &image, std::vector<wmm::Node> &initials, wmm::NodeD &h) {
-
         bool isnewpos[8];
         double valcenter[8];
         double imcenter[8];
@@ -145,16 +131,16 @@ namespace wmm {
         wmm::Grid u_surface = wmm::Grid(wmm::MAX_VAL, image.rows, image.cols, 1);
         wmm::Grid_<unsigned char> state = wmm::Grid_<unsigned char>(image.rows, image.cols);
 
-        std::multimap<double, wmm::Wmm_<double, wmm_degree> > trial_set;
-        std::map<int, typename std::multimap<double, wmm::Wmm_<double, wmm_degree> >::iterator> mapa_trial;
+        std::multimap<double, wmm::Wmm_<double> > trial_set;
+        std::map<int, typename std::multimap<double, wmm::Wmm_<double> >::iterator> mapa_trial;
 
-        typename std::multimap<double, wmm::Wmm_<double, wmm_degree> >::iterator trial_set_it;
-        typename std::map<int, typename std::multimap<double, wmm::Wmm_<double, wmm_degree> >::iterator>::iterator mapa_trial_it;
-        std::pair<double, wmm::Wmm_<double, wmm_degree> > pr_trial;
-        std::pair<int, typename std::multimap<double, wmm::Wmm_<double, wmm_degree> >::iterator> pr_mapa;
+        typename std::multimap<double, wmm::Wmm_<double> >::iterator trial_set_it;
+        typename std::map<int, typename std::multimap<double, wmm::Wmm_<double> >::iterator>::iterator mapa_trial_it;
+        std::pair<double, wmm::Wmm_<double> > pr_trial;
+        std::pair<int, typename std::multimap<double, wmm::Wmm_<double> >::iterator> pr_mapa;
 
         int key, i;
-        wmm::Wmm_<double, wmm_degree> winner, new_w;
+        wmm::Wmm_<double> winner, new_w;
         wmm::Node neigh;
 
         // Initialization
@@ -166,16 +152,15 @@ namespace wmm {
                 winner.v[0] = 0.0;
                 winner.p = initials[i];
                 state.at(initials[i]) = wmm::P_TRIAL;
-                pr_trial = std::pair<double, wmm::Wmm_<double, wmm_degree> >(0.0, winner);
+                pr_trial = std::pair<double, wmm::Wmm_<double> >(0.0, winner);
                 trial_set_it = trial_set.insert(pr_trial);
-                pr_mapa = std::pair<int, typename std::multimap<double, wmm::Wmm_<double, wmm_degree> >::iterator>(key,
-                                                                                                                   trial_set_it);
+                pr_mapa = std::pair<int, typename std::multimap<double, wmm::Wmm_<double> >::iterator>(key,
+                                                                                                       trial_set_it);
                 mapa_trial.insert(pr_mapa);
             }
         }
 
         while (!trial_set.empty()) {
-
             trial_set_it = trial_set.begin();
             key = trial_set_it->second.p.y * u_surface.cols + trial_set_it->second.p.x;
             mapa_trial_it = mapa_trial.find(key);
@@ -235,23 +220,18 @@ namespace wmm {
                     setCoeffs2D(valcenter, new_w.m, i);
                     setCoeffs2D(imcenter, new_w.fm, i);
 
-                    pr_trial = std::pair<double, wmm::Wmm_<double, wmm_degree> >(valcenter[i], new_w);
+                    pr_trial = std::pair<double, wmm::Wmm_<double> >(valcenter[i], new_w);
                     trial_set_it = trial_set.insert(pr_trial);
-                    pr_mapa = std::pair<int, typename std::multimap<double, wmm::Wmm_<double, wmm_degree> >::iterator>(
+                    pr_mapa = std::pair<int, typename std::multimap<double, wmm::Wmm_<double> >::iterator>(
                             key, trial_set_it);
                     mapa_trial.insert(pr_mapa);
 
                     u_surface.at(new_w.p) = valcenter[i];
                 }
             }
-
         }
 
         free(state.data);
-
         return u_surface;
-
     }
-
-
 }
