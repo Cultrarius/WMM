@@ -3,6 +3,7 @@
 #include <map>
 #include <iostream>
 
+using namespace std;
 
 namespace wmm {
 
@@ -27,10 +28,10 @@ namespace wmm {
     double GetEpsilonGradient(wmm::NodeD &dd, wmm::NodeD &dp, wmm::NodeD &dn, wmm::NodeD &fn) {
         double epsilon;
         double A = -dd.y, B = dd.x, C = dd.y * dp.x - dd.x * dp.y;
-        double den = A * fn.x + B * fn.y;
+        double den = B * fn.y;
         double t = (A * dn.x + B * dn.y + C) / den;
 
-        wmm::NodeD x(dn.y - t * fn.y, dn.x - t * fn.x);
+        wmm::NodeD x(dn.y - t * fn.y, dn.x);
 
         if (fabs(dd.x) > 0.0 && fabs(den) > 0.0) {
             epsilon = (x.x - dp.x) / dd.x;
@@ -50,9 +51,52 @@ namespace wmm {
         return epsilon;
     }
 
-    double
-    GetVal2D(wmm::Grid &image, wmm::Grid &u_surface, wmm::Wmm_<double> &wave, wmm::Node &neigh, wmm::NodeD &h) {
-        wmm::NodeD f0(image.at(wave.p, 0), image.at(wave.p, 1)), fn(image.at(neigh, 0), image.at(neigh, 1));
+    double GetInterpValueSimple(wmm::Wmm_<double> &wave, wmm::NodeD &dp, wmm::NodeD &dd, wmm::NodeD &dn, double f0,
+                                double f1, double fn, double epsilon, int side) {
+
+        double ft, value, y0 = wave.v[0], y1 = wave.v[side + 1];
+
+        ft = wave.fm[2 * side + 2] * epsilon * epsilon + wave.fm[2 * side + 1] * epsilon + wave.fm[0];
+        double norm = wmm::norm(dn - dp - epsilon * dd);
+        value = wave.m[2 * side + 2] * epsilon * epsilon + wave.m[2 * side + 1] * epsilon + wave.m[0] +
+                norm * (ft + fn) / 2.0;
+        if (value < y0) {
+            double v0 = (1.0 - epsilon) * y0;
+            double v1 = epsilon * y1;
+            value = v0 + v1 + norm * ((1.0 - epsilon) * f0 + epsilon * f1 + fn) / 2.0;
+        }
+
+        return value;
+    }
+
+    double GetEpsilonGradientSimple(wmm::NodeD &dd, wmm::NodeD &dp, wmm::NodeD &dn, double fn) {
+        double epsilon;
+        double A = -dd.y, B = dd.x, C = dd.y * dp.x - dd.x * dp.y;
+        double den = A * fn + B * fn;
+        double t = (A * dn.x + B * dn.y + C) / den;
+
+        wmm::NodeD x(dn.y - t * fn, dn.x - t * fn);
+
+        if (fabs(dd.x) > 0.0 && fabs(den) > 0.0) {
+            epsilon = (x.x - dp.x) / dd.x;
+        } else if (fabs(dd.y) > 0.0 && fabs(den) > 0.0) {
+            epsilon = (x.y - dp.y) / dd.y;
+        } else if (fabs(den) == 0.0 && wmm::norm(dd) > 0.0) {
+            double dist = fabs(A * dn.x + B * dn.y + C) / sqrt(A * A + B * B);
+            epsilon = (wmm::norm(dn - dp) - dist) / (fabs(dd.x) + fabs(dd.y));
+        } else {
+            return 0.0;
+        }
+
+        if (epsilon < 0.0)
+            epsilon = 0.0;
+        else if (epsilon > 1.0)
+            epsilon = 1.0;
+        return epsilon;
+    }
+
+    double GetVal2DSimple(wmm::Grid &image, wmm::Grid &u_surface, wmm::Wmm_<double> &wave, wmm::Node &neigh, wmm::NodeD &h) {
+        wmm::NodeD f0(image.at(wave.p, 0), 0), fn(image.at(neigh, 0), 0);
         double y0 = wave.v[0];
 
         if (isinf(wmm::norm(f0)) || isnan(wmm::norm(f0)))
@@ -73,7 +117,7 @@ namespace wmm {
                 wmm::NodeD dd(h.y * (wmm::yarray[(wave.dir + 1) % 8] - wmm::yarray[wave.dir]),
                               h.x * (wmm::xarray[(wave.dir + 1) % 8] - wmm::xarray[wave.dir]));
 
-                wmm::NodeD f1(image.at(p, 0), image.at(p, 1));
+                wmm::NodeD f1(image.at(p, 0), 0);
                 if (isinf(wmm::norm(f1)) || isnan(wmm::norm(f1)))
                     f1 = fn;
 
@@ -90,7 +134,7 @@ namespace wmm {
                 wmm::NodeD dd(h.y * (wmm::yarray[(wave.dir + 7) % 8] - wmm::yarray[wave.dir]),
                               h.x * (wmm::xarray[(wave.dir + 7) % 8] - wmm::xarray[wave.dir]));
 
-                wmm::NodeD f1(image.at(p, 0), image.at(p, 1));
+                wmm::NodeD f1(image.at(p, 0), 0);
                 if (isinf(wmm::norm(f1)) || isnan(wmm::norm(f1)))
                     f1 = fn;
 
@@ -122,7 +166,6 @@ namespace wmm {
 
     }
 
-    template<int>
     wmm::Grid WmmIsoSurface2D(wmm::Grid &image, std::vector<wmm::Node> &initials, wmm::NodeD &h) {
         bool isnewpos[8];
         double valcenter[8];
@@ -187,10 +230,9 @@ namespace wmm {
                 neigh = winner.p + wmm::Node(wmm::yarray[i], wmm::xarray[i]);
                 isnewpos[i] = false;
                 valcenter[i] = u_surface.contains(neigh) ? u_surface.at(neigh) : wmm::MAX_VAL;
-                imcenter[i] = u_surface.contains(neigh) ? wmm::norm(wmm::NodeD(image.at(neigh, 0), image.at(neigh, 1)))
-                                                        : wmm::MAX_VAL;
+                imcenter[i] = u_surface.contains(neigh) ? image.at(neigh, 0) : wmm::MAX_VAL;
                 if (u_surface.contains(neigh) && state.at(neigh) != wmm::P_ALIVE) {
-                    double val_neigh = GetVal2D(image, u_surface, winner, neigh, h);
+                    double val_neigh = GetVal2DSimple(image, u_surface, winner, neigh, h);
                     if (val_neigh < valcenter[i]) {
                         valcenter[i] = val_neigh;
                         isnewpos[i] = true;
@@ -233,5 +275,64 @@ namespace wmm {
 
         free(state.data);
         return u_surface;
+    }
+}
+
+#include <iomanip>
+
+int main() {
+    int rows = 8;
+    int cols = 8;
+
+    /* Create output arrays */
+    double *out = (double *) malloc(sizeof(double) * rows * cols);
+    double surface[] = {
+            2, 2, 2, 2, 2, 2, 2, 4,
+            2, 2, 2, 2, 2, 2, 2, 4,
+            2, 2, 2, 2, 2, 2, 2, 4,
+            2, 2, 2, 2, 2, 2, 3, 3,
+            2, 2, 2, 2, 2, 2, 3, 3,
+            2, 2, 2, 2, 2, 2, 3, 3,
+            2, 2, 2, 2, 2, 2, 3, 3,
+            2, 2, 2, 2, 2, 2, 3, 3,
+
+            0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0
+    };
+
+    wmm::Grid imagen(surface, rows, cols);
+
+    std::vector<wmm::Node> initials;
+    //initials.emplace_back(1, 2);
+    initials.emplace_back(1, 1);
+    //initials.emplace_back(0, 0);
+    wmm::NodeD hs = wmm::NodeD(1, 1);
+    wmm::Grid out_surface(out, rows, cols);
+    out_surface = wmm::WmmIsoSurface2D(imagen, initials, hs);
+
+    for (int i = 0; i < rows * cols; i++) {
+        if (i % cols == 0) {
+            cout << "\n";
+        }
+        cout << surface[i] << " ";
+    }
+
+    cout << "\n-----------" << std::fixed << std::setprecision(2);
+
+    for (int i = 0; i < rows * cols; i++) {
+        if (i % cols == 0) {
+            cout << "\n";
+        }
+        if (out_surface.data[i] > 1000) {
+            cout << "XXXX" << " ";
+        } else {
+            cout << out_surface.data[i] << "   ";
+        }
     }
 }
